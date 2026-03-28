@@ -1,0 +1,36 @@
+# Core Agent Framework
+langgraph==0.0.49
+langchain==0.1.20
+langchain-core==0.1.53
+langchain-openai==0.0.8
+langchain-community==0.0.38
+langchain-text-splitters==0.0.2
+
+# LLM & Embedding
+openai==1.46.1
+tiktoken==0.7.0
+
+# Vector Store
+faiss-cpu==1.8.0
+
+# HTTP (must be 0.27.x, 0.28+ removes proxies param used by openai)
+httpx==0.27.0
+
+# PDF Processing
+PyPDF2==3.0.1
+pypdf==4.2.0
+
+# Web UI
+streamlit==1.32.0
+pyvis==0.3.2
+
+# Evaluation
+ragas==0.1.7
+
+# Utilities
+python-dotenv==1.0.1
+dill==0.3.8
+pylcs==0.1.1
+pandas==2.2.2
+pydantic>=1.9.0
+typing_extensions>=4.11.0

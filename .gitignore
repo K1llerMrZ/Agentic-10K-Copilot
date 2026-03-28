@@ -1,0 +1,52 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+.venv1/
+.venv_apple/
+venv/
+env/
+
+# Environment variables (contains API keys)
+.env
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Claude Code sessions
+.claude/
+
+# Logs
+*.log
+
+# Test / coverage
+.tox/
+.nox/
+.coverage
+.pytest_cache/
+htmlcov/
+
+# mypy
+.mypy_cache/
