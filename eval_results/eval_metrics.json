@@ -1,0 +1,82 @@
+{
+  "ragas": {
+    "error": "Skipped by user (--skip-ragas)"
+  },
+  "custom": {
+    "total_questions": 10,
+    "successful": 9,
+    "failed": 1,
+    "success_rate": 0.9,
+    "avg_latency_seconds": 112.2,
+    "avg_steps_per_question": 10.7,
+    "avg_retrievals_per_question": 1.7,
+    "avg_plan_steps": 3.6,
+    "avg_number_coverage": 0.4573,
+    "avg_answer_length_chars": 1118,
+    "avg_context_length_chars": 1098,
+    "by_category": {
+      "financial_metrics": {
+        "count": 2,
+        "success_rate": 1.0,
+        "avg_latency": 91.7
+      },
+      "segment_analysis": {
+        "count": 1,
+        "success_rate": 1.0,
+        "avg_latency": 169.3
+      },
+      "profitability": {
+        "count": 1,
+        "success_rate": 1.0,
+        "avg_latency": 67.0
+      },
+      "product_performance": {
+        "count": 1,
+        "success_rate": 1.0,
+        "avg_latency": 114.1
+      },
+      "risk_factors": {
+        "count": 1,
+        "success_rate": 1.0,
+        "avg_latency": 117.1
+      },
+      "capital_allocation": {
+        "count": 1,
+        "success_rate": 0.0,
+        "avg_latency": 0
+      },
+      "operating_expenses": {
+        "count": 1,
+        "success_rate": 1.0,
+        "avg_latency": 61.7
+      },
+      "balance_sheet": {
+        "count": 1,
+        "success_rate": 1.0,
+        "avg_latency": 233.8
+      },
+      "product_launches": {
+        "count": 1,
+        "success_rate": 1.0,
+        "avg_latency": 63.1
+      }
+    },
+    "by_difficulty": {
+      "easy": {
+        "count": 3,
+        "success_rate": 1.0,
+        "avg_latency": 82.1
+      },
+      "medium": {
+        "count": 4,
+        "success_rate": 1.0,
+        "avg_latency": 103.0
+      },
+      "hard": {
+        "count": 3,
+        "success_rate": 0.6666666666666666,
+        "avg_latency": 175.4
+      }
+    }
+  }
+}

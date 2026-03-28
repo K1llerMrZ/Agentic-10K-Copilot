@@ -84,7 +84,7 @@
 ### 安装
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/Agentic-10K-Copilot.git
+git clone https://github.com/K1llerMrZ/Agentic-10K-Copilot.git
 cd Agentic-10K-Copilot
 
 python -m venv .venv
@@ -152,22 +152,67 @@ sophisticated_rag_agent_apple10-k.ipynb
 ├── simulate_agent.py                  # Streamlit 前端入口
 ├── build_vector_stores.py             # 向量库一键构建脚本
 ├── sophisticated_rag_agent_apple10-k.ipynb  # Jupyter Notebook 教程
+├── eval_questions.json                # 评估数据集（10 题，含 Ground Truth）
+├── run_evaluation.py                  # 自动化评估脚本
+├── eval_results/                      # 评估结果输出
+│   ├── eval_raw_results.json          #   每题原始回答与元数据
+│   ├── eval_metrics.json              #   汇总指标 JSON
+│   └── eval_report.md                 #   可读评估报告
 ├── chunks_vector_store/               # FAISS 向量库：正文切片
 ├── chapter_summaries_vector_store/    # FAISS 向量库：章节摘要
 └── book_quotes_vectorstore/           # FAISS 向量库：财务指标句子
 ```
 
-## 评估指标
+## 评估结果
 
-使用 Ragas 框架进行自动化评估：
+基于 Apple FY2025 10-K 年报设计 10 个问答对，覆盖 9 个类别、3 个难度等级，使用 Ground Truth 进行自动化评估。
 
-| 指标 | 含义 |
+### 总体指标
+
+| 指标 | 值 |
 |------|------|
-| **Faithfulness** | 答案是否忠实于检索到的文档（防幻觉核心指标） |
-| **Answer Relevancy** | 答案是否切题 |
-| **Context Precision** | 检索的文档中相关的比例 |
-| **Context Recall** | 回答所需的信息是否都被检索到了 |
-| **Answer Correctness** | 答案与标准答案的匹配程度 |
+| **成功率** | 90.0%（9/10） |
+| **平均延迟** | 112.2s |
+| **平均执行步数** | 10.7 steps |
+| **平均检索次数** | 1.7 次/问题 |
+| **关键数字覆盖率** | 45.7% |
+
+### 按难度分布
+
+| 难度 | 题数 | 成功率 | 平均延迟 |
+|------|------|--------|----------|
+| Easy（直接查找） | 3 | 100% | 82.1s |
+| Medium（多步分析） | 4 | 100% | 103.0s |
+| Hard（跨章节综合） | 3 | 67% | 175.4s |
+
+### 按类别分布
+
+| 类别 | 成功率 | 平均延迟 |
+|------|--------|----------|
+| financial_metrics | 100% | 91.7s |
+| segment_analysis | 100% | 169.3s |
+| profitability | 100% | 67.0s |
+| product_performance | 100% | 114.1s |
+| risk_factors | 100% | 117.1s |
+| operating_expenses | 100% | 61.7s |
+| balance_sheet | 100% | 233.8s |
+| product_launches | 100% | 63.1s |
+| capital_allocation | 0% | — |
+
+> capital_allocation 类别失败原因：Agent 在信息收集阶段触发递归上限（40 步），属于规划策略的边界情况。
+
+### 评估指标说明
+
+| 指标 | 类型 | 含义 |
+|------|------|------|
+| **Faithfulness** | Ragas | 答案是否忠实于检索到的文档（防幻觉核心指标） |
+| **Answer Relevancy** | Ragas | 答案是否切题 |
+| **Context Recall** | Ragas | 回答所需的信息是否都被检索到了 |
+| **Answer Correctness** | Ragas | 答案与标准答案的匹配程度 |
+| **Key Number Coverage** | Custom | Ground Truth 中关键数字在答案中的出现比例 |
+| **Success Rate** | Custom | 无错误完成的问题比例 |
+
+详细逐题分析见 [`eval_results/eval_report.md`](eval_results/eval_report.md)
 
 ## 设计思路与技术亮点
 

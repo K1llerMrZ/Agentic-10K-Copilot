@@ -293,24 +293,45 @@ def is_relevant_content(state):
         return "not relevant"
 
 
-def create_is_grounded_on_facts_chain():
-    class is_grounded_on_facts(BaseModel):
-        """
-        Output schema for the rewritten question.
-        """
-        grounded_on_facts: bool = Field(description="Answer is grounded in the facts, 'yes' or 'no'")
+class _GroundedResult:
+    """Simple container for grounding check result."""
+    def __init__(self, grounded_on_facts: bool):
+        self.grounded_on_facts = grounded_on_facts
 
+def _parse_bool_from_llm(output, field_name="grounded_on_facts") -> bool:
+    """从 LLM 文本输出中解析布尔值，兼容各种格式。"""
+    text = output.content if hasattr(output, 'content') else str(output)
+    text_lower = text.lower().strip()
+    # 尝试 JSON 解析
+    m = _re.search(r'\{[\s\S]*\}', text)
+    if m:
+        try:
+            data = _json.loads(m.group())
+            val = data.get(field_name, data.get("grounded", None))
+            if val is not None:
+                return bool(val)
+        except _json.JSONDecodeError:
+            pass
+    # 关键词匹配
+    if "true" in text_lower or "yes" in text_lower or "grounded" in text_lower:
+        return True
+    return False
+
+def create_is_grounded_on_facts_chain():
     is_grounded_on_facts_llm = ChatOpenAI(temperature=0, model_name="qwen-max", max_tokens=2000)
     is_grounded_on_facts_prompt_template = """You are a fact-checker that determines if the given answer {answer} is grounded in the given context {context}
     you don't mind if it doesn't make sense, as long as it is grounded in the context.
-    output a json containing the answer to the question, and appart from the json format don't output any additional text.
-
+    Reply with ONLY a JSON object: {{"grounded_on_facts": true}} or {{"grounded_on_facts": false}}
     """
     is_grounded_on_facts_prompt = PromptTemplate(
         template=is_grounded_on_facts_prompt_template,
         input_variables=["context", "answer"],
     )
-    is_grounded_on_facts_chain = is_grounded_on_facts_prompt | is_grounded_on_facts_llm.with_structured_output(is_grounded_on_facts)
+
+    def _parse_grounded(output):
+        return _GroundedResult(_parse_bool_from_llm(output, "grounded_on_facts"))
+
+    is_grounded_on_facts_chain = is_grounded_on_facts_prompt | is_grounded_on_facts_llm | _parse_grounded
     return is_grounded_on_facts_chain
 
 
@@ -339,26 +360,25 @@ def create_can_be_answered_chain():
 def create_is_distilled_content_grounded_on_content_chain():
     is_distilled_content_grounded_on_content_prompt_template = """you receive some distilled content: {distilled_content} and the original context: {original_context}.
         you need to determine if the distilled content is grounded on the original context.
-        if the distilled content is grounded on the original context, set the grounded field to true.
-        if the distilled content is not grounded on the original context, set the grounded field to false."""
-    
+        Reply with ONLY a JSON object: {{"grounded": true}} or {{"grounded": false}}
+        """
 
-    class IsDistilledContentGroundedOnContent(BaseModel):
-        grounded: bool = Field(description="Whether the distilled content is grounded on the original context.")
-        explanation: str = Field(description="An explanation of why the distilled content is or is not grounded on the original context.")
-
-    # is_distilled_content_grounded_on_content_json_parser = JsonOutputParser(pydantic_object=IsDistilledContentGroundedOnContent)
+    is_distilled_content_grounded_on_content_llm = ChatOpenAI(temperature=0, model_name="qwen-max", max_tokens=2000)
 
     is_distilled_content_grounded_on_content_prompt = PromptTemplate(
         template=is_distilled_content_grounded_on_content_prompt_template,
         input_variables=["distilled_content", "original_context"],
-        # partial_variables={"format_instructions": is_distilled_content_grounded_on_content_json_parser.get_format_instructions()},
     )
 
-    # is_distilled_content_grounded_on_content_llm = ChatGroq(temperature=0, model_name="llama3-70b-8192", groq_api_key=groq_api_key, max_tokens=4000)
-    is_distilled_content_grounded_on_content_llm =ChatOpenAI(temperature=0, model_name="qwen-max", max_tokens=2000)
+    class _DistilledGroundedResult:
+        def __init__(self, grounded: bool, explanation: str = ""):
+            self.grounded = grounded
+            self.explanation = explanation
 
-    is_distilled_content_grounded_on_content_chain = is_distilled_content_grounded_on_content_prompt | is_distilled_content_grounded_on_content_llm.with_structured_output(IsDistilledContentGroundedOnContent)
+    def _parse_distilled_grounded(output):
+        return _DistilledGroundedResult(_parse_bool_from_llm(output, "grounded"))
+
+    is_distilled_content_grounded_on_content_chain = is_distilled_content_grounded_on_content_prompt | is_distilled_content_grounded_on_content_llm | _parse_distilled_grounded
     return is_distilled_content_grounded_on_content_chain
 
 is_distilled_content_grounded_on_content_chain = create_is_distilled_content_grounded_on_content_chain()
@@ -801,16 +821,13 @@ def create_anonymize_question_chain():
 
 
 def create_deanonymize_plan_chain():
-    class DeAnonymizePlan(BaseModel):
-        """Possible results of the action."""
-        plan: List = Field(description="Plan to follow in future. with all the variables replaced with the mapped words.")
-
-
     de_anonymize_plan_prompt_template = """ you receive a list of tasks: {plan}, where some of the words are replaced with mapped variables. you also receive
     the mapping for those variables to words {mapping}. replace all the variables in the list of tasks with the mapped words. if no variables are present,
-    return the original list of tasks. in any case, just output the updated list of tasks in a json format as described here, without any additional text apart from the
-    """
+    return the original list of tasks.
 
+    Output ONLY a valid JSON object in this exact format (no other text):
+    {{"plan": ["step 1 with real names", "step 2 with real names"]}}
+    """
 
     de_anonymize_plan_prompt = PromptTemplate(
         template=de_anonymize_plan_prompt_template,
@@ -818,19 +835,26 @@ def create_deanonymize_plan_chain():
     )
 
     de_anonymize_plan_llm = ChatOpenAI(temperature=0, model_name="qwen-max", max_tokens=2000)
-    de_anonymize_plan_chain = de_anonymize_plan_prompt | de_anonymize_plan_llm.with_structured_output(DeAnonymizePlan)
+
+    class _DeAnonymizedPlan:
+        def __init__(self, plan):
+            self.plan = plan
+
+    def _parse_deanonymized(output):
+        text = output.content if hasattr(output, 'content') else str(output)
+        data = _repair_json(text)
+        steps = data.get("plan", data.get("steps", []))
+        return _DeAnonymizedPlan(steps)
+
+    de_anonymize_plan_chain = de_anonymize_plan_prompt | de_anonymize_plan_llm | _parse_deanonymized
     return de_anonymize_plan_chain
 
 def create_can_be_answered_already_chain():
-    class CanBeAnsweredAlready(BaseModel):
-        """Possible results of the action."""
-        can_be_answered: bool = Field(description="Whether the question can be fully answered or not based on the given context.")
-
     can_be_answered_already_prompt_template = """You receive a query: {question} and a context: {context}.
     You need to determine if the question can be fully answered relying only the given context.
-    The only infomation you have and can rely on is the context you received. 
+    The only infomation you have and can rely on is the context you received.
     you have no prior knowledge of the question or the context.
-    if you think the question can be answered based on the context, output 'true', otherwise output 'false'.
+    Reply with ONLY a JSON object: {{"can_be_answered": true}} or {{"can_be_answered": false}}
     """
 
     can_be_answered_already_prompt = PromptTemplate(
@@ -838,8 +862,15 @@ def create_can_be_answered_already_chain():
         input_variables=["question","context"],
     )
 
+    class _CanBeAnsweredResult:
+        def __init__(self, can_be_answered: bool):
+            self.can_be_answered = can_be_answered
+
+    def _parse_can_be_answered(output):
+        return _CanBeAnsweredResult(_parse_bool_from_llm(output, "can_be_answered"))
+
     can_be_answered_already_llm = ChatOpenAI(temperature=0, model_name="qwen-max", max_tokens=2000)
-    can_be_answered_already_chain = can_be_answered_already_prompt | can_be_answered_already_llm.with_structured_output(CanBeAnsweredAlready)
+    can_be_answered_already_chain = can_be_answered_already_prompt | can_be_answered_already_llm | _parse_can_be_answered
     return can_be_answered_already_chain
 
 

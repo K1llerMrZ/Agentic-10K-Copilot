@@ -1,0 +1,72 @@
+[
+  {
+    "id": "Q01",
+    "category": "financial_metrics",
+    "difficulty": "easy",
+    "question": "What was Apple's total net sales in fiscal year 2025?",
+    "ground_truth": "Apple's total net sales in fiscal year 2025 were $416.2 billion ($416,161 million), representing a 6% increase compared to fiscal year 2024's $391.0 billion."
+  },
+  {
+    "id": "Q02",
+    "category": "segment_analysis",
+    "difficulty": "medium",
+    "question": "How did Apple's Services segment perform in FY2025 compared to FY2024? What were the main growth drivers?",
+    "ground_truth": "Services net sales were $109.2 billion ($109,158 million) in FY2025, up 14% from $96.2 billion in FY2024. The growth was primarily driven by higher net sales from advertising, the App Store and cloud services. Services gross margin was 75.4%, up from 73.9% in FY2024, with gross profit of $82.3 billion."
+  },
+  {
+    "id": "Q03",
+    "category": "profitability",
+    "difficulty": "medium",
+    "question": "Compare Apple's Products and Services gross margin percentages in FY2025. Which segment is more profitable on a margin basis?",
+    "ground_truth": "In FY2025, Products gross margin percentage was 36.8% while Services gross margin percentage was 75.4%. Services is significantly more profitable on a margin basis, with nearly double the gross margin percentage of Products. Products gross margin was $112.9 billion and Services gross margin was $82.3 billion, totaling $195.2 billion overall (46.9% total gross margin)."
+  },
+  {
+    "id": "Q04",
+    "category": "product_performance",
+    "difficulty": "medium",
+    "question": "Which product categories saw revenue growth and which declined in FY2025? Provide specific numbers.",
+    "ground_truth": "Revenue growth categories: iPhone $209.6B (+4%, driven by higher Pro model sales), Mac $33.7B (+12%, higher laptop and desktop sales), iPad $28.0B (+5%, higher iPad Air, iPad mini and iPad sales), Services $109.2B (+14%). Revenue decline: Wearables, Home and Accessories $35.7B (-4%, lower Accessories and Wearables sales). Total net sales were $416.2B (+6%)."
+  },
+  {
+    "id": "Q05",
+    "category": "risk_factors",
+    "difficulty": "hard",
+    "question": "What tariff-related risks does Apple face according to its FY2025 10-K? How might these impact the business?",
+    "ground_truth": "Beginning in Q2 2025, new U.S. tariffs were announced on imports from China, India, Japan, South Korea, Taiwan, Vietnam and the EU. Several countries imposed or threatened reciprocal tariffs. The U.S. Department of Commerce initiated a Section 232 investigation into semiconductor imports. These tariffs can materially impact Apple's supply chain, availability of raw materials and components, pricing and gross margin. The ultimate impact depends on whether additional tariffs are imposed, other countries' retaliatory measures, and the magnitude and duration of these measures."
+  },
+  {
+    "id": "Q06",
+    "category": "financial_metrics",
+    "difficulty": "easy",
+    "question": "What was Apple's net income and diluted earnings per share in FY2025?",
+    "ground_truth": "Apple's net income in FY2025 was $112.0 billion ($112,010 million), up from $93.7 billion in FY2024. Diluted earnings per share was $7.46, up from $6.08 in FY2024. The effective tax rate was 15.6%, significantly lower than the 24.1% in FY2024, partly due to a $10.7 billion decrease related to the State Aid Decision."
+  },
+  {
+    "id": "Q07",
+    "category": "capital_allocation",
+    "difficulty": "hard",
+    "question": "Describe Apple's capital return program in FY2025, including share repurchases and dividends.",
+    "ground_truth": "In May 2025, Apple announced a new $100 billion share repurchase program and raised its quarterly dividend from $0.25 to $0.26 per share. During FY2025, Apple repurchased $89.3 billion of common stock and paid dividends and dividend equivalents of $15.4 billion ($1.02 per share for the year). The company held $132.4 billion in cash, cash equivalents and marketable securities as of September 27, 2025, with outstanding debt of $91.3 billion."
+  },
+  {
+    "id": "Q08",
+    "category": "operating_expenses",
+    "difficulty": "medium",
+    "question": "How did Apple's R&D spending change in FY2025 and what percentage of revenue does it represent?",
+    "ground_truth": "Research and development expenses were $34.6 billion ($34,550 million) in FY2025, a 10% increase from $31.4 billion in FY2024. R&D represented 8% of total net sales, consistent with FY2024. The growth was primarily driven by increases in headcount-related expenses. Total operating expenses were $62.2 billion (15% of revenue), including $27.6 billion in SG&A (6% growth)."
+  },
+  {
+    "id": "Q09",
+    "category": "balance_sheet",
+    "difficulty": "hard",
+    "question": "What is Apple's financial position as reflected in its balance sheet at the end of FY2025? Discuss assets, liabilities and equity.",
+    "ground_truth": "As of September 27, 2025, Apple's total assets were $359.2 billion (down from $365.0B), with current assets of $148.0 billion including $35.9B cash and $18.8B marketable securities. Total liabilities were $285.5 billion (down from $308.0B), including $90.7B in total term debt. Total shareholders' equity was $73.7 billion (up from $57.0B). The company had $132.4 billion in total cash, cash equivalents and marketable securities (current + non-current)."
+  },
+  {
+    "id": "Q10",
+    "category": "product_launches",
+    "difficulty": "easy",
+    "question": "What major products did Apple announce or launch during fiscal year 2025?",
+    "ground_truth": "Q1 2025: MacBook Pro, Mac mini, iMac, iPad mini. Q2 2025: iPhone 16e, iPad Air, iPad, MacBook Air, Mac Studio. Q3 2025: iOS 26, macOS Tahoe 26, iPadOS 26, watchOS 26, visionOS 26 and tvOS 26. Q4 2025: iPhone 17, iPhone Air, iPhone 17 Pro and iPhone 17 Pro Max, Apple Watch Series 11, Apple Watch SE 3, Apple Watch Ultra 3, AirPods Pro 3."
+  }
+]
