@@ -13,8 +13,11 @@ from pprint import pprint
 import os
 import re as _re
 import json as _json
+import numpy as np
 from typing_extensions import TypedDict
 from typing import List, TypedDict
+
+from rank_bm25 import BM25Okapi
 
 
 
@@ -57,16 +60,70 @@ os.environ["OPENAI_BASE_URL"] = os.getenv('OPENAI_BASE_URL', 'https://dashscope.
 
 
 
+class HybridRetriever:
+    """
+    Dense (FAISS) + Sparse (BM25) 混合检索器，使用 RRF 重排算法。
+    解决纯向量检索对专有名词和精确数字不敏感的问题。
+    """
+
+    def __init__(self, faiss_store, k_dense=3, k_sparse=3, k_final=2, rrf_k=60):
+        self.faiss_store = faiss_store
+        self.k_dense = k_dense
+        self.k_sparse = k_sparse
+        self.k_final = k_final
+        self.rrf_k = rrf_k
+
+        # 从 FAISS docstore 中提取所有文档，构建 BM25 索引
+        all_docs = list(faiss_store.docstore._dict.values())
+        self.all_docs = all_docs
+        tokenized = [doc.page_content.lower().split() for doc in all_docs]
+        self.bm25 = BM25Okapi(tokenized)
+        print(f"[HybridRetriever] Built BM25 index over {len(all_docs)} documents")
+
+    def get_relevant_documents(self, query: str):
+        """执行混合检索：FAISS + BM25，RRF 融合排序"""
+        # Dense retrieval (语义)
+        dense_docs = self.faiss_store.similarity_search(query, k=self.k_dense)
+
+        # Sparse retrieval (关键词 BM25)
+        tokenized_query = query.lower().split()
+        bm25_scores = self.bm25.get_scores(tokenized_query)
+        top_indices = np.argsort(bm25_scores)[-self.k_sparse:][::-1]
+        sparse_docs = [self.all_docs[i] for i in top_indices if bm25_scores[i] > 0]
+
+        # Reciprocal Rank Fusion
+        return self._rrf_merge(dense_docs, sparse_docs)
+
+    def _rrf_merge(self, dense_docs, sparse_docs):
+        """RRF (Reciprocal Rank Fusion) 重排算法"""
+        doc_scores = {}  # content_hash -> [score, doc]
+
+        for rank, doc in enumerate(dense_docs):
+            key = hash(doc.page_content)
+            if key not in doc_scores:
+                doc_scores[key] = [0.0, doc]
+            doc_scores[key][0] += 1.0 / (self.rrf_k + rank + 1)
+
+        for rank, doc in enumerate(sparse_docs):
+            key = hash(doc.page_content)
+            if key not in doc_scores:
+                doc_scores[key] = [0.0, doc]
+            doc_scores[key][0] += 1.0 / (self.rrf_k + rank + 1)
+
+        sorted_docs = sorted(doc_scores.values(), key=lambda x: x[0], reverse=True)
+        return [doc for _, doc in sorted_docs[:self.k_final]]
+
+
 def create_retrievers():
     embeddings = DashScopeEmbeddings(model="text-embedding-v3")
     chunks_vector_store =  FAISS.load_local("chunks_vector_store", embeddings, allow_dangerous_deserialization=True)
     chapter_summaries_vector_store =  FAISS.load_local("chapter_summaries_vector_store", embeddings, allow_dangerous_deserialization=True)
     book_quotes_vectorstore =  FAISS.load_local("book_quotes_vectorstore", embeddings, allow_dangerous_deserialization=True)
 
-
-
-    chunks_query_retriever = chunks_vector_store.as_retriever(search_kwargs={"k": 1})     
-    chapter_summaries_query_retriever = chapter_summaries_vector_store.as_retriever(search_kwargs={"k": 1})
+    # Hybrid Retriever: Dense (FAISS) + Sparse (BM25) + RRF 重排
+    chunks_query_retriever = HybridRetriever(chunks_vector_store, k_dense=3, k_sparse=3, k_final=2)
+    chapter_summaries_query_retriever = HybridRetriever(chapter_summaries_vector_store, k_dense=2, k_sparse=2, k_final=2)
+    # book_quotes 保留纯向量检索（已有 k=10 高召回）
     book_quotes_query_retriever = book_quotes_vectorstore.as_retriever(search_kwargs={"k": 10})
     return chunks_query_retriever, chapter_summaries_query_retriever, book_quotes_query_retriever
 
@@ -1083,6 +1140,73 @@ def run_qualtative_answer_workflow_for_final_answer(state):
     return state
 
 
+def _extract_key_numbers(text: str) -> set:
+    """从文本中提取所有关键财务数字（$金额、百分比、大数字）"""
+    patterns = [
+        r'\$[\d,]+\.?\d*\s*(?:billion|million|B|M|trillion|T)?',  # $391 billion
+        r'[\d,]+\.?\d*\s*%',                                       # 37.5%
+        r'[\d,]+\.?\d*\s*(?:billion|million|B|M)\b',               # 268 billion
+    ]
+    numbers = set()
+    for pattern in patterns:
+        for match in _re.findall(pattern, text, _re.IGNORECASE):
+            numbers.add(match.strip())
+    return numbers
+
+
+def number_audit_step(state: PlanExecute):
+    """
+    Self-Correction 数字审计节点 (Direction 5)：
+    检查最终答案是否完整保留了上下文中的关键财务数字。
+    若数字覆盖率不足，重新生成答案并强制包含缺失数字。
+    """
+    state["curr_state"] = "number_audit"
+    context = state.get("aggregated_context") or ""
+    response = state.get("response") or ""
+
+    # 处理 response 可能是 dict 的情况
+    if isinstance(response, dict):
+        answer_text = response.get("answer", str(response))
+    else:
+        answer_text = str(response)
+
+    context_numbers = _extract_key_numbers(context)
+    if not context_numbers:
+        print("[Number Audit] No key numbers found in context, skipping.")
+        return state
+
+    answer_numbers = _extract_key_numbers(answer_text)
+    matched = context_numbers & answer_numbers
+    missing = context_numbers - answer_numbers
+    coverage = len(matched) / len(context_numbers) if context_numbers else 1.0
+
+    print(f"[Number Audit] Context: {len(context_numbers)} numbers | "
+          f"Answer: {len(answer_numbers)} | Coverage: {coverage:.0%}")
+
+    if coverage >= 0.3:
+        print("[Number Audit] Coverage acceptable, passing through.")
+        return state
+
+    # 覆盖率不足，重新生成答案
+    # 策略：将缺失数字提示注入 question 而非 context，保持 context 纯净以维持 Faithfulness
+    missing_list = ", ".join(sorted(missing)[:10])  # 最多列 10 个
+    print(f"[Number Audit] Low coverage ({coverage:.0%}). "
+          f"Regenerating with {len(missing)} missing numbers: {missing_list[:100]}...")
+
+    augmented_question = (
+        f"{state['question']}\n\n"
+        f"IMPORTANT: Your answer must explicitly cite the following specific figures "
+        f"from the context (if they appear there): {missing_list}"
+    )
+    inputs = {"question": augmented_question, "context": context}
+    for output in qualitative_answer_workflow_app.stream(inputs):
+        for _, value in output.items():
+            pass
+    state["response"] = value
+    print("[Number Audit] Answer regenerated with missing numbers.")
+    return state
+
+
 def anonymize_queries(state: PlanExecute):
     """
     Anonymizes the question.
@@ -1253,6 +1377,9 @@ def create_agent():
     # Add answer from context node
     agent_workflow.add_node("get_final_answer", run_qualtative_answer_workflow_for_final_answer)
 
+    # Add number audit node (Self-Correction: 数字审计)
+    agent_workflow.add_node("number_audit", number_audit_step)
+
     # Set the entry point
     agent_workflow.set_entry_point("anonymize_question")
 
@@ -1286,8 +1413,11 @@ def create_agent():
     # After replanning we check if the question can be answered, if yes we go to get_final_answer, if not we go to task_handler
     agent_workflow.add_conditional_edges("replan",can_be_answered, {"can_be_answered_already": "get_final_answer", "cannot_be_answered_yet": "break_down_plan"})
 
-    # After getting the final answer we end
-    agent_workflow.add_edge("get_final_answer", END)
+    # After getting the final answer, run number audit (Self-Correction)
+    agent_workflow.add_edge("get_final_answer", "number_audit")
+
+    # After number audit we end
+    agent_workflow.add_edge("number_audit", END)
 
 
     plan_and_execute_app = agent_workflow.compile()

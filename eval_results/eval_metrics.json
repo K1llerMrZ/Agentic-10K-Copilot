@@ -1,85 +1,85 @@
 {
   "ragas": {
-    "faithfulness": 0.98,
-    "answer_relevancy": 0.9013,
-    "context_recall": 0.7667,
-    "answer_correctness": 0.6553,
-    "answer_similarity": 0.8503
+    "faithfulness": 0.8635,
+    "answer_relevancy": 0.9244,
+    "context_recall": 0.7517,
+    "answer_correctness": 0.6314,
+    "answer_similarity": 0.8551
   },
   "custom": {
     "total_questions": 10,
     "successful": 10,
     "failed": 0,
     "success_rate": 1.0,
-    "avg_latency_seconds": 139.4,
-    "avg_steps_per_question": 10.0,
-    "avg_retrievals_per_question": 1.5,
-    "avg_plan_steps": 3.2,
-    "avg_number_coverage": 0.3455,
-    "avg_answer_length_chars": 904,
-    "avg_context_length_chars": 907,
+    "avg_latency_seconds": 119.9,
+    "avg_steps_per_question": 9.8,
+    "avg_retrievals_per_question": 1.2,
+    "avg_plan_steps": 3.4,
+    "avg_number_coverage": 0.3435,
+    "avg_answer_length_chars": 848,
+    "avg_context_length_chars": 838,
     "by_category": {
       "financial_metrics": {
         "count": 2,
         "success_rate": 1.0,
-        "avg_latency": 266.2
+        "avg_latency": 108.9
       },
       "segment_analysis": {
         "count": 1,
         "success_rate": 1.0,
-        "avg_latency": 109.7
+        "avg_latency": 161.3
       },
       "profitability": {
         "count": 1,
         "success_rate": 1.0,
-        "avg_latency": 62.2
+        "avg_latency": 87.3
       },
       "product_performance": {
         "count": 1,
         "success_rate": 1.0,
-        "avg_latency": 100.1
+        "avg_latency": 142.5
       },
       "risk_factors": {
         "count": 1,
         "success_rate": 1.0,
-        "avg_latency": 124.4
+        "avg_latency": 109.3
       },
       "capital_allocation": {
         "count": 1,
         "success_rate": 1.0,
-        "avg_latency": 138.0
+        "avg_latency": 121.1
       },
       "operating_expenses": {
         "count": 1,
         "success_rate": 1.0,
-        "avg_latency": 66.5
+        "avg_latency": 104.3
       },
       "balance_sheet": {
         "count": 1,
         "success_rate": 1.0,
-        "avg_latency": 204.0
+        "avg_latency": 172.8
       },
       "product_launches": {
         "count": 1,
         "success_rate": 1.0,
-        "avg_latency": 57.0
+        "avg_latency": 83.0
       }
     },
     "by_difficulty": {
       "easy": {
         "count": 3,
         "success_rate": 1.0,
-        "avg_latency": 196.5
+        "avg_latency": 100.3
       },
       "medium": {
         "count": 4,
         "success_rate": 1.0,
-        "avg_latency": 84.6
+        "avg_latency": 123.9
       },
       "hard": {
         "count": 3,
         "success_rate": 1.0,
-        "avg_latency": 155.5
+        "avg_latency": 134.4
       }
     }
   }
