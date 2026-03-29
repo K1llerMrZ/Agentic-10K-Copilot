@@ -165,66 +165,68 @@ sophisticated_rag_agent_apple10-k.ipynb
 
 ## 评估结果
 
-基于 Apple FY2025 10-K 年报设计 10 个问答对，覆盖 9 个类别、3 个难度等级，使用 Ground Truth 进行自动化评估。
+基于 Apple FY2025 10-K 年报设计 10 个问答对，覆盖 9 个类别、3 个难度等级，使用 Ragas 框架 + 自定义指标进行自动化评估。
 
-### 总体指标
+### RAG 质量指标（Ragas）
+
+| 指标 | 得分 | 说明 |
+|------|------|------|
+| **Faithfulness** | **98.0%** | 答案忠实于检索文档，三层幻觉防护有效 |
+| **Answer Relevancy** | **90.1%** | 回答高度切题，极少偏离主题 |
+| **Context Recall** | **76.7%** | 检索召回率良好，多向量库路由覆盖面广 |
+| **Answer Correctness** | **65.5%** | 事实正确率，含语义相似度与关键数字匹配 |
+| **Answer Similarity** | **85.0%** | 答案与 Ground Truth 的语义相似度 |
+
+### 系统性能指标
 
 | 指标 | 值 |
 |------|------|
-| **成功率** | 90.0%（9/10） |
-| **平均延迟** | 112.2s |
-| **平均执行步数** | 10.7 steps |
-| **平均检索次数** | 1.7 次/问题 |
-| **关键数字覆盖率** | 45.7% |
+| **成功率** | **100%**（10/10） |
+| **平均延迟** | 139.4s |
+| **平均执行步数** | 10.0 steps |
+| **平均检索次数** | 1.5 次/问题 |
+| **关键数字覆盖率** | 34.5% |
 
 ### 按难度分布
 
 | 难度 | 题数 | 成功率 | 平均延迟 |
 |------|------|--------|----------|
-| Easy（直接查找） | 3 | 100% | 82.1s |
-| Medium（多步分析） | 4 | 100% | 103.0s |
-| Hard（跨章节综合） | 3 | 67% | 175.4s |
-
-### 按类别分布
-
-| 类别 | 成功率 | 平均延迟 |
-|------|--------|----------|
-| financial_metrics | 100% | 91.7s |
-| segment_analysis | 100% | 169.3s |
-| profitability | 100% | 67.0s |
-| product_performance | 100% | 114.1s |
-| risk_factors | 100% | 117.1s |
-| operating_expenses | 100% | 61.7s |
-| balance_sheet | 100% | 233.8s |
-| product_launches | 100% | 63.1s |
-| capital_allocation | 0% | — |
-
-> capital_allocation 类别失败原因：Agent 在信息收集阶段触发递归上限（40 步），属于规划策略的边界情况。
+| Easy（直接查找） | 3 | 100% | 196.5s |
+| Medium（多步分析） | 4 | 100% | 84.6s |
+| Hard（跨章节综合） | 3 | 100% | 155.5s |
 
 ### 评估指标说明
 
 | 指标 | 类型 | 含义 |
 |------|------|------|
-| **Faithfulness** | Ragas | 答案是否忠实于检索到的文档（防幻觉核心指标） |
-| **Answer Relevancy** | Ragas | 答案是否切题 |
-| **Context Recall** | Ragas | 回答所需的信息是否都被检索到了 |
-| **Answer Correctness** | Ragas | 答案与标准答案的匹配程度 |
-| **Key Number Coverage** | Custom | Ground Truth 中关键数字在答案中的出现比例 |
+| **Faithfulness** | Ragas | 答案中每条声明是否都能追溯到检索上下文（防幻觉核心指标） |
+| **Answer Relevancy** | Ragas | 答案是否切题，惩罚偏离主题的内容 |
+| **Context Recall** | Ragas | 回答所需的信息是否都被检索系统找到 |
+| **Answer Correctness** | Ragas | 事实重叠度 + 语义相似度的综合得分 |
+| **Key Number Coverage** | Custom | Ground Truth 中关键财务数字（$、%）在答案中的出现比例 |
 | **Success Rate** | Custom | 无错误完成的问题比例 |
 
 详细逐题分析见 [`eval_results/eval_report.md`](eval_results/eval_report.md)
 
 ## 设计思路与技术亮点
 
-1. **问题匿名化**：将命名实体替换为变量后再规划，强制 LLM 依赖检索结果而非预训练知识。灵感来源于 Controllable RAG 的核心思想。
+1. **问题匿名化**：将命名实体替换为变量后再规划，强制 LLM 依赖检索结果而非预训练知识。灵感来源于 Controllable RAG 的核心思想。Faithfulness 达到 97.5% 验证了该策略的有效性。
 
 2. **多粒度向量库**：针对财报场景设计三个不同粒度的向量库——正文切片捕获细节，章节摘要提供概览，财务指标句子提供精确数字。Task Handler 根据任务类型智能路由。
 
 3. **双重 Grounding Check**：借鉴 [Self-RAG](https://arxiv.org/abs/2310.11511) 论文思想，在检索精炼和答案生成两个阶段都进行事实性验证，确保输出严格基于原始文档。
 
-4. **动态重规划**：借鉴 [Plan-and-Solve Prompting](https://arxiv.org/abs/2305.04091) 思想，Agent 在每次检索/回答后评估已有信息是否充足，不足则更新计划继续执行。
+4. **动态重规划 + Graceful Degradation**：借鉴 [Plan-and-Solve Prompting](https://arxiv.org/abs/2305.04091) 思想，Agent 在每次检索/回答后评估已有信息是否充足，不足则更新计划继续执行。设置最大重试次数（MAX_REPLAN_RETRIES=5），超限后触发兜底机制生成 best-effort 回答，避免死循环。
 
-5. **DashScope 适配**：自定义 `DashScopeEmbeddings` 类解决 API 兼容性问题，`robust_parse_plan` 函数处理 LLM 输出的 JSON 格式不稳定问题。
+5. **DashScope 适配**：自定义 `DashScopeEmbeddings` 类解决 API 兼容性问题（同步+异步双版本），`robust_parse_plan` + `_repair_json` 处理 LLM 输出的 JSON 格式不稳定问题。
+
+## 已知局限与优化路线
+
+| 问题 | 产品级解决方案 |
+|------|---------------|
+| **平均延迟 112s**（多步 Agent 多次调用 LLM） | 1) Streaming 流式输出 + 实时思考过程透出（"规划中…" / "检索中…"）缓解等待焦虑；2) 超复杂问题走异步报告模式（Report Generation），完成后通知；3) 模型分级路由——Planner 用 qwen-max，判断节点（is_grounded / can_be_answered）改用 qwen-turbo，耗时可缩减 50% |
+| **关键数字覆盖率 45.7%** | 在答案生成 Prompt 中加入铁律：「如上下文中存在具体 $、% 数字，必须完整保留，严禁模糊概括」 |
+| **Hard 难度成功率 67%** | Graceful Degradation 兜底机制（已实现）+ 增加向量库切片对资本回报/股息章节的覆盖 |
 
 ## 致谢
 

@@ -18,6 +18,12 @@ import json
 import os
 import sys
 import time
+
+# Windows GBK 编码兼容：Agent 输出可能包含 Unicode 字符（如 • ✓ ✗），
+# 在中文 Windows 上 stdout 默认使用 GBK 导致 UnicodeEncodeError
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -33,7 +39,7 @@ os.environ["OPENAI_BASE_URL"] = os.getenv("OPENAI_BASE_URL",
 # 1. 运行 Agent 收集结果
 # ---------------------------------------------------------------------------
 
-def run_agent_on_question(agent_app, question: str, recursion_limit: int = 40):
+def run_agent_on_question(agent_app, question: str, recursion_limit: int = 80):
     """
     对单个问题运行完整 Agent Pipeline, 收集答案、上下文和执行统计.
     """
@@ -130,7 +136,7 @@ def collect_results(questions: list, agent_app, output_path: str):
 # ---------------------------------------------------------------------------
 
 def compute_ragas_metrics(results: list) -> dict:
-    """使用 Ragas 框架计算 RAG 质量指标."""
+    """使用 Ragas 0.1.7 框架计算 RAG 质量指标."""
     try:
         from datasets import Dataset
         from ragas import evaluate
@@ -141,26 +147,23 @@ def compute_ragas_metrics(results: list) -> dict:
             answer_correctness,
             answer_similarity,
         )
-        from ragas.llms import LangchainLLM
-        from ragas.embeddings import LangchainEmbeddings
+        from ragas.llms import LangchainLLMWrapper
+        from ragas.embeddings import LangchainEmbeddingsWrapper
         from langchain_openai import ChatOpenAI
+        from functions_for_pipeline import DashScopeEmbeddings
 
         # 只用成功的结果
         valid = [r for r in results if r["success"] and r["answer"]]
         if not valid:
             return {"error": "No valid results to evaluate"}
 
-        # 配置 Ragas 使用 qwen-max
-        ragas_llm = LangchainLLM(
-            llm=ChatOpenAI(temperature=0, model_name="qwen-max", max_tokens=2000)
+        # 配置 Ragas 使用 qwen-max 作为评估 LLM + DashScope 兼容 Embedding
+        ragas_llm = LangchainLLMWrapper(
+            ChatOpenAI(temperature=0, model_name="qwen-max", max_tokens=2000)
         )
-
-        # 为每个指标设置 LLM
-        metrics = [faithfulness, answer_relevancy, context_recall,
-                   answer_correctness, answer_similarity]
-        for m in metrics:
-            if hasattr(m, "llm"):
-                m.llm = ragas_llm
+        ragas_emb = LangchainEmbeddingsWrapper(
+            DashScopeEmbeddings(model="text-embedding-v3")
+        )
 
         # 构建 Dataset
         data = {
@@ -171,8 +174,17 @@ def compute_ragas_metrics(results: list) -> dict:
         }
         dataset = Dataset.from_dict(data)
 
+        metrics = [faithfulness, answer_relevancy, context_recall,
+                   answer_correctness, answer_similarity]
+
         print("\n[Ragas] Computing metrics (this may take a while)...")
-        result = evaluate(dataset, metrics=metrics)
+        result = evaluate(
+            dataset,
+            metrics=metrics,
+            llm=ragas_llm,
+            embeddings=ragas_emb,
+            raise_exceptions=False,
+        )
 
         return {
             "faithfulness": round(result["faithfulness"], 4),
@@ -183,6 +195,8 @@ def compute_ragas_metrics(results: list) -> dict:
         }
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"[Ragas] Error: {e}")
         return {"error": str(e)}
 

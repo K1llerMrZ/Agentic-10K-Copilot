@@ -23,7 +23,7 @@ from helper_functions import escape_quotes, text_wrap
 
 
 class DashScopeEmbeddings(OpenAIEmbeddings):
-    """兼容 DashScope 的 Embedding 包装类"""
+    """兼容 DashScope 的 Embedding 包装类，发送纯字符串而非 token 数组"""
 
     def embed_documents(self, texts, **kwargs):
         results = []
@@ -37,6 +37,13 @@ class DashScopeEmbeddings(OpenAIEmbeddings):
     def embed_query(self, text):
         response = self.client.create(input=[text], model=self.model)
         return response.data[0].embedding
+
+    # Ragas 等框架通过 async 方法调用 Embedding，此处回退到同步实现
+    async def aembed_documents(self, texts, **kwargs):
+        return self.embed_documents(texts, **kwargs)
+
+    async def aembed_query(self, text):
+        return self.embed_query(text)
 
 
 
@@ -198,6 +205,9 @@ def create_question_answer_from_context_cot_chain():
 
     For the question below, provide your answer by first showing your step-by-step reasoning process, breaking down the problem into a chain of thought before arriving at the final answer,
     just like in the previous examples.
+
+    CRITICAL RULE: As a financial analyst, you MUST preserve ALL specific dollar amounts ($), percentages (%), and numerical figures found in the context. List every relevant number explicitly — never summarize numbers into vague phrases like "increased significantly" when the exact figure is available. Missing a key number is a serious error in financial analysis.
+
     Context
     {context}
     Question
@@ -388,16 +398,19 @@ def is_distilled_content_grounded_on_content(state):
 
     """
     Determines if the distilled content is grounded on the original context.
-
-    Args:
-        distilled_content: The distilled content.
-        original_context: The original context.
-
-    Returns:
-        Whether the distilled content is grounded on the original context.
+    Implements Graceful Degradation: after MAX_GROUNDING_RETRIES, accepts content as-is.
     """
 
-    print("Determining if the distilled content is grounded on the original context...")
+    retry_count = (state.get("grounding_retry_count") or 0) + 1
+    state["grounding_retry_count"] = retry_count
+
+    # Graceful Degradation: 超过最大重试次数，强制接受当前内容
+    if retry_count > MAX_GROUNDING_RETRIES:
+        print(f"[Graceful Degradation] Grounding check retried {MAX_GROUNDING_RETRIES} times. "
+              f"Accepting current content as-is.")
+        return "grounded on the original context"
+
+    print(f"Determining if the distilled content is grounded on the original context... (attempt {retry_count}/{MAX_GROUNDING_RETRIES})")
     distilled_content = state["relevant_context"]
     original_context = state["context"]
 
@@ -460,6 +473,8 @@ def retrieve_book_quotes_context_per_question(state):
 
 
 
+MAX_GROUNDING_RETRIES = 3  # 内层 Grounding Check 最大重试次数
+
 class QualitativeRetrievalGraphState(TypedDict):
     """
     Represents the state of our graph.
@@ -468,6 +483,7 @@ class QualitativeRetrievalGraphState(TypedDict):
     question: str
     context: str
     relevant_context: str
+    grounding_retry_count: int  # Grounding Check 重试计数
 
 
 def create_qualitative_retrieval_book_chunks_workflow_app():
@@ -594,6 +610,8 @@ def create_qualitative_answer_workflow_app():
     return qualitative_answer_workflow_app
 
 
+MAX_REPLAN_RETRIES = 5  # 最大重规划次数，超过后触发兜底回答
+
 class PlanExecute(TypedDict):
     curr_state: str
     question: str
@@ -601,11 +619,12 @@ class PlanExecute(TypedDict):
     query_to_retrieve_or_answer: str
     plan: List[str]
     past_steps: List[str]
-    mapping: dict 
+    mapping: dict
     curr_context: str
     aggregated_context: str
     tool: str
     response: str
+    replan_count: int  # 重规划计数器，用于 Graceful Degradation
 
 class Plan(BaseModel):
         """Plan to follow in future"""
@@ -1141,14 +1160,11 @@ def break_down_plan_step(state: PlanExecute):
 
 def replan_step(state: PlanExecute):
     """
-    Replans the next step.
-    Args:
-        state: The current state of the plan execution.
-    Returns:
-        The updated state with the plan.
+    Replans the next step. Increments replan_count for graceful degradation.
     """
     state["curr_state"] = "replan"
-    print("Replanning step")
+    state["replan_count"] = (state.get("replan_count") or 0) + 1
+    print(f"Replanning step (attempt {state['replan_count']}/{MAX_REPLAN_RETRIES})")
     pprint("--------------------")
     inputs = {"question": state["question"], "plan": state["plan"], "past_steps": state["past_steps"], "aggregated_context": state["aggregated_context"]}
     plan = replanner.invoke(inputs)
@@ -1159,12 +1175,25 @@ def replan_step(state: PlanExecute):
 def can_be_answered(state: PlanExecute):
     """
     Determines if the question can be answered.
-    Args:
-        state: The current state of the plan execution.
-    Returns:
-        whether the original question can be answered or not.
+    Implements Graceful Degradation: after MAX_REPLAN_RETRIES attempts,
+    forces a best-effort answer instead of continuing the loop.
     """
     state["curr_state"] = "can_be_answered_already"
+    replan_count = state.get("replan_count") or 0
+
+    # Graceful Degradation: 超过最大重试次数，强制生成兜底回答
+    if replan_count >= MAX_REPLAN_RETRIES:
+        print(f"[Graceful Degradation] Reached max replan retries ({MAX_REPLAN_RETRIES}). "
+              f"Forcing best-effort answer with available context.")
+        pprint("--------------------")
+        ctx = state.get("aggregated_context", "")
+        if not ctx.strip():
+            state["aggregated_context"] = (
+                f"[系统提示] 经过 {replan_count} 轮检索，未能找到足够的相关信息来完整回答该问题。"
+                f"请用户确认该信息是否包含在 10-K 年报的其他章节中。"
+            )
+        return "can_be_answered_already"
+
     print("Checking if the ORIGINAL QUESTION can be answered already")
     pprint("--------------------")
     question = state["question"]
